@@ -1,0 +1,45 @@
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments and credentials
+.venv/
+.venvs/
+.env
+.env.*
+!.env.example
+configs/parent_repo.local.txt
+
+# External task data, local knowledge, runs, and reports
+datasets/
+questions.json
+tmp/
+runs/
+reports/
+results/
+private/
+seeded/
+exports/
+
+# Framework/runtime artifacts
+*.log
+*.db
+*.db-shm
+*.db-wal
+.agents/
+.opencode/
+.osisai_t6/
+xdg-data/
+xdg-cache/
+xdg-state/
+xdg-config/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
