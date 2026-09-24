@@ -19,6 +19,7 @@ from baselines._framework_common import (
     package_version,
     LIBRARY_LOOP_BOUND,
 )
+from common.weknora_read import hybrid_search, list_knowledge_bases
 
 
 ROLE_ORDER = ("researcher", "answerer", "reviewer")
@@ -89,6 +90,7 @@ def _crewai_runtime(request: dict[str, Any], prompt: str) -> dict[str, Any]:
         "timeout": settings["timeout"],
         "temperature": settings["temperature"],
         "seed": settings["seed"],
+        "reasoning_effort": settings["reasoning_effort"],
     }
     if settings["max_tokens"] is not None:
         llm_kwargs["max_tokens"] = settings["max_tokens"]
@@ -103,7 +105,19 @@ def _crewai_runtime(request: dict[str, Any], prompt: str) -> dict[str, Any]:
 
         return read_skill_resource(skills_dir, skill_name, relative_path)
 
-    resource = [read_skill_resource_tool]
+    @tool("list_knowledge_bases")
+    def list_knowledge_bases_tool() -> str:
+        """List WeKnora knowledge bases. Read-only."""
+
+        return list_knowledge_bases()
+
+    @tool("hybrid_search")
+    def hybrid_search_tool(kb_id: str, query: str, match_count: int = 5) -> str:
+        """Hybrid-search one WeKnora knowledge base by id or name."""
+
+        return hybrid_search(kb_id, query, match_count)
+
+    resource = [read_skill_resource_tool, list_knowledge_bases_tool, hybrid_search_tool]
     read_tools = [*resource, *_file_tools(skills_dir, write=False)]
     researcher = Agent(
         role="OSIS knowledge researcher",

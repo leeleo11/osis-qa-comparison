@@ -9,7 +9,9 @@ from typing import Any, Mapping
 PRIVATE_FIELDS = frozenset(
     {"Final answer", "final_answer", "gold", "aliases", "source", "answer"}
 )
-VALID_CATEGORIES = frozenset({"usage", "hallucination", "template"})
+VALID_CATEGORIES = frozenset(
+    {"usage", "hallucination", "template", "workflow", "spec", "runtime", "compute"}
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -53,9 +53,10 @@ uv run python scripts/verify_parent_protocol.py --parent-repo C:\path\to\osis-sk
 ```powershell
 $env:OSIS_MODEL_API_KEY = '<local-secret>'
 $env:OSIS_MODEL_BASE_URL = 'http://your-gateway/v1'
+$env:WEKNORA_API_KEY = '<weknora-key>'
 ```
 
-T1–T5 使用上面的模型网关。T6 不在本仓库启动 OpenCode，也不修改 bash、edit 或外部目录权限。先按父仓库 `datasets/qa/run_eval.py --via agent` 的方式启动 OpenCode（默认 `http://127.0.0.1:4096`），本仓库再调用同一个 `chat_via_agent`。题面只含系统提示和 Question。
+T1–T5 使用上面的模型网关。T2–T5 另外用 `WEKNORA_API_KEY` 调用 `list_knowledge_bases` 和 `hybrid_search`，与父仓库 OpenCode 的只读知识库相同。T1 没有工具循环，不查库。T6 不在本仓库启动 OpenCode，也不修改 bash、edit 或外部目录权限。先按父仓库 `datasets/qa/run_eval.py --via agent` 的方式启动 OpenCode（默认 `http://127.0.0.1:4096`），本仓库再调用同一个 `chat_via_agent`。题面只含系统提示和 Question。
 
 ## 6. 先 dry-run，再运行
 

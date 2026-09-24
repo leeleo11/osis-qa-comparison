@@ -16,6 +16,7 @@ from baselines._framework_common import (
     LIBRARY_LOOP_BOUND,
     package_version,
 )
+from common.weknora_read import hybrid_search, list_knowledge_bases
 
 
 Runtime = Callable[[dict[str, Any], str, list[Any]], dict[str, Any]]
@@ -37,7 +38,62 @@ def _load_native_skills(skills_dir: Path, loader: Callable[[Path], Any] | None =
 def native_tool_specs() -> list[Any]:
     from openhands.tools.preset.default import get_default_tools
 
-    return get_default_tools(enable_browser=False)
+    return [*get_default_tools(enable_browser=False), *_weknora_tools()]
+
+
+def _weknora_tools() -> list[Any]:
+    """Same read-only WeKnora calls as the parent MCP, beside the default agent tools."""
+
+    from openhands.sdk import Tool
+    from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor, register_tool
+
+    def expose(name: str, description: str, function: Any, properties: dict[str, Any], required: list[str]) -> Any:
+        action_type = Action.from_mcp_schema(
+            f"{name}_action",
+            {"type": "object", "properties": properties, "required": required},
+        )
+
+        class ObservationText(Observation):
+            """WeKnora tool text."""
+
+        class Executor(ToolExecutor):
+            def __call__(self, action, conversation=None):  # noqa: ANN001
+                arguments = {key: value for key, value in action.model_dump().items() if key in properties}
+                try:
+                    return ObservationText.from_text(text=str(function(**arguments)))
+                except Exception as exc:  # noqa: BLE001
+                    return ObservationText.from_text(text=f"TOOL_ERROR: {type(exc).__name__}: {exc}", is_error=True)
+
+        class Definition(ToolDefinition[action_type, ObservationText]):
+            @classmethod
+            def create(cls, conv_state=None, **kwargs):  # noqa: ANN001
+                return [
+                    cls(
+                        description=description,
+                        action_type=action_type,
+                        observation_type=ObservationText,
+                        executor=Executor(),
+                    )
+                ]
+
+        Definition.name = name
+        register_tool(name, Definition)
+        return Tool(name=name)
+
+    return [
+        expose("list_knowledge_bases", "List WeKnora knowledge bases.", list_knowledge_bases, {}, []),
+        expose(
+            "hybrid_search",
+            "Hybrid-search one WeKnora knowledge base.",
+            hybrid_search,
+            {
+                "kb_id": {"type": "string"},
+                "query": {"type": "string"},
+                "match_count": {"type": "integer"},
+            },
+            ["kb_id", "query"],
+        ),
+    ]
 
 
 def build_t4_prompt(request: dict[str, Any]) -> str:
@@ -46,6 +102,7 @@ def build_t4_prompt(request: dict[str, Any]) -> str:
     return (
         f"{system}\n\nUse the native invoke_skill tool (OpenHands InvokeSkillTool) first. "
         "Then use the framework terminal and file editor inside the knowledge workspace. "
+        "For API facts, call list_knowledge_bases and hybrid_search. "
         "Do not reconstruct skill bodies from an injected inventory. "
         "Finish with exactly one FINAL ANSWER line.\n\n"
         f"Question:\n{question}"
@@ -72,7 +129,31 @@ def _event_summary(events: list[Any]) -> tuple[list[dict[str, Any]], int, int, l
     return trace, len(response_ids) or int(bool(events)), tool_calls, invoked
 
 
+def _tolerate_missing_cache_fields() -> None:
+    """DeepSeek omits cache fields that this LiteLLM build then deletes and later reads."""
+
+    from litellm.types.utils import PromptTokensDetailsWrapper
+
+    if getattr(PromptTokensDetailsWrapper, "_qa_cache_patch", False):
+        return
+    original = PromptTokensDetailsWrapper.__getattribute__
+
+    def _getattribute(self, name: str):  # noqa: ANN001
+        try:
+            return original(self, name)
+        except AttributeError:
+            if name in {"cache_creation_tokens", "cache_write_tokens"}:
+                return 0
+            if name == "cache_creation_token_details":
+                return None
+            raise
+
+    PromptTokensDetailsWrapper.__getattribute__ = _getattribute  # type: ignore[method-assign]
+    PromptTokensDetailsWrapper._qa_cache_patch = True  # type: ignore[attr-defined]
+
+
 def _openhands_runtime(request: dict[str, Any], prompt: str, native_skills: list[Any]) -> dict[str, Any]:
+    _tolerate_missing_cache_fields()
     from openhands.sdk import Agent, AgentContext, Conversation, LLM
     from openhands.sdk.conversation import get_agent_final_response
 
@@ -87,6 +168,7 @@ def _openhands_runtime(request: dict[str, Any], prompt: str, native_skills: list
         "api_mode": "chat",
         "temperature": settings["temperature"],
         "seed": settings["seed"],
+        "reasoning_effort": settings["reasoning_effort"],
         "usage_id": "t4-qa",
     }
     if settings["max_tokens"] is not None:

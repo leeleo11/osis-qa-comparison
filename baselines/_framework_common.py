@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from common.skill_adapter import SkillAdapter
+from common.weknora_read import hybrid_search, list_knowledge_bases
 
 
 def load_request(argv: list[str] | None = None) -> dict[str, Any]:
@@ -62,6 +63,7 @@ def build_prompt(request: dict[str, Any]) -> str:
     return (
         (str(request.get("system_prompt") or "").strip())
         + "\n\nAnswer the following OSIS API question. Use only the mounted public knowledge. "
+        "Before answering an API question, call list_knowledge_bases and then hybrid_search. "
         "Do not inspect datasets, evaluator files, other runs, or hidden answers. "
         "Research as needed, then end with exactly one concise FINAL ANSWER line.\n\nQuestion:\n"
         + model_visible_task(request)["Question"]
@@ -143,6 +145,8 @@ class KnowledgeTools:
             self.list_knowledge_files,
             self.search_knowledge,
             self.read_knowledge_file,
+            list_knowledge_bases,
+            hybrid_search,
         ]
 
 
@@ -153,6 +157,7 @@ def model_api_settings(request: dict[str, Any]) -> dict[str, Any]:
         "api_key": request.get("api_key") or os.environ.get("OSIS_MODEL_API_KEY", ""),
         "temperature": float(request.get("temperature", 0.0)),
         "seed": int(request.get("seed", 0)),
+        "reasoning_effort": str(request.get("variant") or request.get("reasoning_effort") or "low"),
         "timeout": float(request.get("request_timeout_s", 180.0)),
         "max_tokens": resolve_max_tokens(request.get("max_output_tokens", request.get("max_tokens"))),
     }

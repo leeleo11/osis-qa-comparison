@@ -37,7 +37,7 @@ uv run python scripts/run_dataset.py `
   --dry-run
 ```
 
-完整复现步骤见 [REPRODUCIBILITY.md](REPRODUCIBILITY.md)。
+怎么开跑、并行或串行、T1–T5 的具体挂法见 [docs/框架使用说明.md](docs/框架使用说明.md)。从零安装见 [REPRODUCIBILITY.md](REPRODUCIBILITY.md)。
 
 ## 评分
 

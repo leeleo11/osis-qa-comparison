@@ -30,6 +30,8 @@ def test_t2_runs_react_with_read_only_knowledge_tools(tmp_path: Path) -> None:
             "list_knowledge_files",
             "search_knowledge",
             "read_knowledge_file",
+            "list_knowledge_bases",
+            "hybrid_search",
         ]
         return {"final_answer": "FINAL ANSWER: 否", "model_calls": 2, "tool_calls": 1}
 

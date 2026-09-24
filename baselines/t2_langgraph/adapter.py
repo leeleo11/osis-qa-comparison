@@ -31,6 +31,7 @@ def _langgraph_runtime(request: dict[str, Any], prompt: str, tools: KnowledgeToo
         "api_key": settings["api_key"],
         "temperature": settings["temperature"],
         "seed": settings["seed"],
+        "reasoning_effort": settings["reasoning_effort"],
         "timeout": settings["timeout"],
     }
     if settings["max_tokens"] is not None:

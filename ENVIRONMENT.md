@@ -20,6 +20,8 @@
 
 - `OSIS_MODEL_API_KEY`：模型网关密钥，只通过环境变量传入。
 - `OSIS_MODEL_BASE_URL`：OpenAI 兼容 `/v1` 地址。
-- 父仓库 OpenCode 须已按父仓库问答评测的方式启动，默认 `http://127.0.0.1:4096`。本仓库不读取 `OPENCODE_EXE`，也不写 OpenCode 权限配置。
+- `WEKNORA_API_KEY`：T2–T5 调用只读知识库时使用。未设置则这两个工具返回错误。
+- `WEKNORA_BASE_URL`：可选。代码默认是 `https://knowledge.osisbim.com/api/v1`。父仓库本机 OpenCode 实际用的是内网地址，需在能访问该内网时用环境变量覆盖。公网地址若返回拦截页，知识库调用会失败，模型仍可改查本地技能。
+- 父仓库 OpenCode 须已按父仓库问答评测的方式启动，默认 `http://127.0.0.1:4096`。T6 使用那里已经挂好的 WeKnora MCP。本仓库不读取 `OPENCODE_EXE`，也不写 OpenCode 权限配置。
 
-凭据不会写入 request、manifest、日志或结果。T1–T5 的模型密钥只通过环境变量传入。
+凭据不会写入 request、manifest、日志或结果。

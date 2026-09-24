@@ -15,6 +15,7 @@ from baselines._framework_common import (
     LIBRARY_LOOP_BOUND,
     package_version,
 )
+from common.weknora_read import hybrid_search, list_knowledge_bases
 
 
 AUTHORIZED_IMPORTS = ["json", "pathlib"]
@@ -46,13 +47,16 @@ def build_t3_prompt(request: dict[str, Any]) -> str:
         f"{system}\n\nUse import pathlib to read the mounted knowledge directory. "
         "Each subdirectory that contains SKILL.md is one skill. "
         "Do not read parent datasets, gold answers, or other runs. "
+        "For API facts, call list_knowledge_bases then hybrid_search before guessing. "
         "Finish with exactly one FINAL ANSWER line.\n\n"
         f"Knowledge directory:\n{skills}\n\nQuestion:\n{question}"
     ).strip()
 
 
 def _smolagents_runtime(request: dict[str, Any], prompt: str) -> dict[str, Any]:
-    from smolagents import CodeAgent, LogLevel, OpenAIServerModel
+    from smolagents import CodeAgent, LogLevel, OpenAIServerModel, tool
+
+    kb_tools = [tool(list_knowledge_bases), tool(hybrid_search)]
 
     class _CodeActCompatibleOpenAIModel(OpenAIServerModel):
         def generate(self, messages, *args, **kwargs):  # type: ignore[no-untyped-def]
@@ -70,11 +74,12 @@ def _smolagents_runtime(request: dict[str, Any], prompt: str) -> dict[str, Any]:
         "client_kwargs": {"timeout": settings["timeout"], "max_retries": 2},
         "temperature": settings["temperature"],
         "seed": settings["seed"],
+        "extra_body": {"reasoning_effort": settings["reasoning_effort"]},
     }
     if settings["max_tokens"] is not None:
         kwargs["max_tokens"] = settings["max_tokens"]
     agent = CodeAgent(
-        tools=[],
+        tools=kb_tools,
         model=_CodeActCompatibleOpenAIModel(**kwargs),
         max_steps=LIBRARY_LOOP_BOUND,
         verbosity_level=LogLevel.ERROR,
