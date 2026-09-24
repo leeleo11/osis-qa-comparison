@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from common.paths import resolve_parent_repo, resolve_run_root
+from common.weknora_read import apply_parent_weknora
 from qa.data import load_external_questions, load_system_prompt
 from qa.runner import QARunner
 from scripts.setup_framework_envs import environment_plan, python_in
@@ -78,6 +79,8 @@ def build_runner(args: argparse.Namespace, parent: Path) -> QARunner:
     if not key:
         raise RuntimeError("OSIS_MODEL_API_KEY is not set")
     os.environ["OSIS_MODEL_API_KEY"] = key
+    os.environ["OSIS_PARENT_REPO"] = str(parent)
+    apply_parent_weknora(parent)
     return QARunner(
         runs_root=resolve_run_root(args.runs_dir),
         skills_dir=Path(args.skills_dir),

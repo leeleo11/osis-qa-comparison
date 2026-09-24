@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -16,7 +17,33 @@ _UUID = re.compile(
 _DEFAULT_BASE = "https://knowledge.osisbim.com/api/v1"
 
 
+def apply_parent_weknora(parent_repo: str | Path | None) -> None:
+    """Use the parent OpenCode retrieval key when the process has none.
+
+    Reads ``mcp.weknora.environment`` only. Does not print the key.
+    An already-set ``WEKNORA_API_KEY`` wins.
+    """
+
+    if os.environ.get("WEKNORA_API_KEY", "").strip() or not parent_repo:
+        return
+    path = Path(parent_repo) / ".agents" / "opencode.json"
+    if not path.is_file():
+        return
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+        environment = config["mcp"]["weknora"]["environment"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return
+    key = str(environment.get("WEKNORA_API_KEY") or "").strip()
+    base = str(environment.get("WEKNORA_BASE_URL") or "").strip()
+    if key:
+        os.environ["WEKNORA_API_KEY"] = key
+    if base and not os.environ.get("WEKNORA_BASE_URL", "").strip():
+        os.environ["WEKNORA_BASE_URL"] = base
+
+
 def _client() -> tuple[str, dict[str, str]] | str:
+    apply_parent_weknora(os.environ.get("OSIS_PARENT_REPO"))
     key = os.environ.get("WEKNORA_API_KEY", "").strip()
     if not key:
         return "TOOL_ERROR: WEKNORA_API_KEY is not set"
