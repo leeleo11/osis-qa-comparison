@@ -17,14 +17,16 @@ def test_t3_runs_codeagent_runtime(tmp_path: Path) -> None:
         "model": "m",
     }
 
-    def runtime(_request: dict, prompt: str, tools) -> dict:
+    def runtime(_request: dict, prompt: str) -> dict:
         assert "How many?" in prompt
+        assert "import pathlib" in prompt
         assert "qa-003" not in prompt
         assert '"category"' not in prompt
-        assert tools.search_knowledge("answer")
+        assert str(skills) in prompt
         return {"final_answer": "FINAL ANSWER: 3", "model_calls": 3, "tool_calls": 2}
 
     result = adapter.run_generation(request, runtime=runtime)
     assert result["status"] == "completed"
     assert result["interaction_mode"] == "codeact"
+    assert result["authorized_imports"] == ["json", "pathlib"]
     assert result["model_calls"] == 3

@@ -9,13 +9,15 @@
 | ID | 架构 | 本任务线中的框架特征 |
 | --- | --- | --- |
 | T1 | Direct | 单次模型请求；确定性注入完整公开知识快照；无工具 |
-| T2 | LangGraph | `create_agent` 流式 ReAct；列表、检索、读取三个只读工具 |
-| T3 | smolagents | `CodeAgent` / CodeAct；通过代码式工具调用检索知识 |
-| T4 | OpenHands | 原生 AgentSkills 渐进加载；`invoke_skill` + Conversation |
-| T5 | CrewAI | 研究、作答、只读复核三角色顺序编排 |
-| T6 | OSIS-AI | 每题独立 OpenCode 环境；原生技能发现与会话工作流；强制串行 |
+| T2 | LangGraph | `create_agent` 流式 ReAct；与建模线相同的只读技能和知识工具，无写文件 |
+| T3 | smolagents | `CodeAgent`，`tools=[]`；解释器放行 `json`、`pathlib`，自己读知识目录 |
+| T4 | OpenHands | 原生 `invoke_skill`；官方终端、文件编辑器和任务跟踪；浏览器关闭 |
+| T5 | CrewAI | `Crew(skills=...)`，允许委派；官方文件工具；复核者只读 |
+| T6 | OSIS-AI | 不另起服务；调用父仓库 `datasets/qa/run_eval.py` 的 `chat_via_agent`；强制串行 |
 
-六个架构的模型只接收同一个 `Question`、system prompt、知识快照、模型、variant、seed 和预算。`task_id`、category、gold、aliases 与 source 留在统一 runner 内，用于运行标识、分组和评分。
+T6 复用父仓库问答代理，读的是父仓库 OpenCode 里的技能。T1–T5 拿到这棵技能树的完整副本，题面仍是同一个 `Question` 和 system prompt。`task_id`、category、gold、aliases 与 source 留在统一 runner 内，用于运行标识、分组和评分。
+
+框架细节见 [docs/框架使用说明.md](docs/框架使用说明.md)。环境见 [ENVIRONMENT.md](ENVIRONMENT.md)。
 
 ## 快速验证
 

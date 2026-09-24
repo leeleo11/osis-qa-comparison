@@ -11,8 +11,8 @@ from baselines._framework_common import (
     build_prompt,
     finish,
     model_api_settings,
+    LIBRARY_LOOP_BOUND,
     package_version,
-    resolve_max_steps,
 )
 
 
@@ -46,7 +46,7 @@ def _langgraph_runtime(request: dict[str, Any], prompt: str, tools: KnowledgeToo
     trace: list[dict[str, Any]] = []
     for state in agent.stream(
         {"messages": [{"role": "user", "content": prompt}]},
-        config={"recursion_limit": resolve_max_steps(request.get("max_steps")) * 2 + 2},
+        config={"recursion_limit": LIBRARY_LOOP_BOUND},
         stream_mode="values",
     ):
         messages = list(state.get("messages") or []) if isinstance(state, dict) else []

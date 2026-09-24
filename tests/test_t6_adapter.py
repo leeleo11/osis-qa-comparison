@@ -1,64 +1,47 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from baselines.t6_osisai import adapter
 
 
-def test_t6_prompt_is_question_only_contract() -> None:
-    prompt = adapter.build_agent_prompt(
+def test_t6_calls_parent_without_a_local_permission_config(tmp_path: Path) -> None:
+    source = Path(adapter.__file__).read_text(encoding="utf-8")
+    assert "chat_via_agent" in source
+    assert "prepare_isolated_env" not in source
+    assert '"bash"' not in source
+    seen: dict[str, object] = {}
+
+    def chat(request: dict[str, object]) -> dict[str, object]:
+        seen["question"] = request["task"]["Question"]  # type: ignore[index]
+        seen["model"] = request["model"]
+        return {"raw": "FINAL ANSWER: no", "usage": {"total_tokens": 3}}
+
+    result = adapter.run_generation(
         {
             "task": {"task_id": "qa-001", "Question": "First arg?", "category": "usage"},
             "system_prompt": "Finish with FINAL ANSWER:",
+            "workspace": str(tmp_path / "run"),
+            "model": "model-x",
+        },
+        chat=chat,
+    )
+    assert seen["question"] == "First arg?"
+    assert seen["model"] == "model-x"
+    assert result["interaction_mode"] == "parent_session"
+    assert result["skill_loading"] == "parent_repo"
+    assert result["final_answer"] == "FINAL ANSWER: no"
+    assert not (tmp_path / "run" / ".agents").exists()
+
+
+def test_t6_fails_without_the_parent_runner(tmp_path: Path) -> None:
+    result = adapter.run_generation(
+        {
+            "task": {"task_id": "qa-001", "Question": "First arg?"},
+            "workspace": str(tmp_path / "run"),
+            "model": "m",
+            "parent_repo": str(tmp_path / "missing-parent"),
         }
     )
-    assert "First arg?" in prompt
-    assert "FINAL ANSWER:" in prompt
-    assert "Final answer" not in prompt
-    assert "qa-001" not in prompt
-    assert '"category"' not in prompt
-
-
-def test_t6_isolated_config_pins_model_and_env_secret(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("NO_PROXY", "")
-    monkeypatch.setenv("no_proxy", "")
-    monkeypatch.setenv("OSIS_PARENT_REPO", "C:/private/parent")
-    monkeypatch.setenv("QA_API_KEY", "private-evaluator-key")
-    monkeypatch.setenv("OPENAI_API_KEY", "unrelated-provider-key")
-    monkeypatch.setenv("OSIS_MODEL_API_KEY", "comparison-gateway-key")
-    skills = tmp_path / "skills"
-    (skills / "osis-engine").mkdir(parents=True)
-    (skills / "osis-engine" / "SKILL.md").write_text("skill", encoding="utf-8")
-    native_agents = tmp_path / "native" / "AGENTS.md"
-    native_agents.parent.mkdir()
-    native_agents.write_text("native OSIS-AI workflow", encoding="utf-8")
-    env = adapter.prepare_isolated_env(
-        tmp_path / "isolated",
-        skills,
-        "http://gateway/v1",
-        model="model-x",
-        seed=17,
-        max_steps=23,
-        agents_source=native_agents,
-    )
-    config = json.loads((tmp_path / "isolated" / ".agents" / "opencode.json").read_text(encoding="utf-8"))
-    assert config["provider"]["comparison"]["options"]["apiKey"] == "{env:OSIS_MODEL_API_KEY}"
-    assert "model-x" in config["provider"]["comparison"]["models"]
-    assert config["provider"]["comparison"]["models"]["model-x"]["options"]["seed"] == 17
-    assert config["agent"]["build"]["temperature"] == 0.0
-    assert config["agent"]["build"]["steps"] == 23
-    assert config["agent"]["build"]["options"]["seed"] == 17
-    assert config["permission"]["external_directory"] == "deny"
-    assert config["permission"]["bash"] == "deny"
-    assert config["permission"]["edit"] == "deny"
-    assert len(config["instructions"]) == 2
-    assert Path(env["OPENCODE_CONFIG_DIR"]).is_dir()
-    assert Path(env["XDG_CONFIG_HOME"]).is_dir()
-    assert {"127.0.0.1", "localhost", "::1"}.issubset(set(env["NO_PROXY"].split(",")))
-    assert "OSIS_PARENT_REPO" not in env
-    assert "QA_API_KEY" not in env
-    assert "OPENAI_API_KEY" not in env
-    assert env["OSIS_MODEL_API_KEY"] == "comparison-gateway-key"
-    assert (tmp_path / "isolated" / ".agents" / "skills" / "osis-engine" / "SKILL.md").is_file()
-    assert (tmp_path / "isolated" / ".agents" / "AGENTS.md").read_text(encoding="utf-8") == "native OSIS-AI workflow"
+    assert result["status"] == "failed"
+    assert result["error_type"] == "FileNotFoundError"

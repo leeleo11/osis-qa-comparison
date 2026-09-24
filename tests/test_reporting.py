@@ -16,7 +16,7 @@ def _run(
     *,
     status: str = "completed",
 ) -> None:
-    run = root / arch / task / "seed-0"
+    run = root / arch / "qa" / category / f"{task}__seed0"
     run.mkdir(parents=True)
     (run / "input.json").write_text(
         json.dumps({"task_id": task, "category": category}), encoding="utf-8"
@@ -58,6 +58,7 @@ def test_write_reports_creates_json_and_csv(tmp_path: Path) -> None:
     assert outputs["summary"].is_file()
     assert outputs["records"].is_file()
     assert "architecture_id" in outputs["records"].read_text(encoding="utf-8")
+    assert "result_tree" in outputs["records"].read_text(encoding="utf-8")
 
 
 def test_reporting_counts_failed_generation_in_denominator(tmp_path: Path) -> None:

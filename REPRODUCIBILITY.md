@@ -38,7 +38,7 @@ uv run python scripts/create_knowledge_snapshot.py `
   --output tmp\qa-knowledge-snapshot
 ```
 
-脚本只复制父协议列出的三类 gold source：`SKILL.md`、`pyosis_doc.py`、`项目画像.md`。模板代码、questions、gold、aliases 与 source 字段不会进入快照。`tmp/` 被 Git 忽略。
+脚本完整复制父仓库 `.agents/skills`，与 T6 所在 OpenCode 能读到的技能树一致。`datasets/qa` 里的 questions、gold、aliases 与 source 不会进入快照。`tmp/` 被 Git 忽略。
 
 校验本地评分器与父仓库协议：
 
@@ -55,7 +55,7 @@ $env:OSIS_MODEL_API_KEY = '<local-secret>'
 $env:OSIS_MODEL_BASE_URL = 'http://your-gateway/v1'
 ```
 
-T6 需要 `opencode` 可执行文件。若不在 PATH，设置 `OPENCODE_EXE` 或传 `--opencode-executable`。默认复制固定父仓库的 `.agents/AGENTS.md` 作为 OSIS-AI 原生指令，并另加一份实验边界指令；也可用 `--osis-agents-file` 显式指定随 OSIS 安装的原生文件。T6 为每题创建独立 config、XDG config/data/cache/state 和会话，禁止 Shell、编辑与外部目录访问，并从子进程环境移除父仓库位置和无关 API key。
+T1–T5 使用上面的模型网关。T6 不在本仓库启动 OpenCode，也不修改 bash、edit 或外部目录权限。先按父仓库 `datasets/qa/run_eval.py --via agent` 的方式启动 OpenCode（默认 `http://127.0.0.1:4096`），本仓库再调用同一个 `chat_via_agent`。题面只含系统提示和 Question。
 
 ## 6. 先 dry-run，再运行
 
@@ -81,7 +81,7 @@ uv run python scripts/run_campaign.py `
   --jobs 1
 ```
 
-`--jobs` 只影响 T1–T5；T6 始终进入独立串行 lane。正式对比建议 `--jobs 1`，减少网关负载差异。
+`--jobs` 只影响 T1–T5。T6 始终串行，因为它复用父仓库正在运行的 OpenCode。正式对比建议 `--jobs 1`，减少网关负载差异。
 
 同一个 label、架构、题号和 seed 再次运行时，旧目录先移入 `runs/_archive/<UTC时间>/`；汇总器忽略归档，只统计当前 attempt。`--resume` 会直接复用已经完成的当前 attempt。
 

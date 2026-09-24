@@ -22,6 +22,11 @@ def test_t2_runs_react_with_read_only_knowledge_tools(tmp_path: Path) -> None:
         assert "qa-001" not in prompt
         assert '"category"' not in prompt
         assert [fn.__name__ for fn in tools.functions()] == [
+            "list_skills",
+            "read_skill",
+            "read_skill_reference",
+            "list_reference_files",
+            "search_skill_cases",
             "list_knowledge_files",
             "search_knowledge",
             "read_knowledge_file",

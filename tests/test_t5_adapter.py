@@ -9,7 +9,8 @@ def test_t5_has_research_answer_review_role_chain() -> None:
     roles = adapter.role_blueprint()
     assert [role["id"] for role in roles] == ["researcher", "answerer", "reviewer"]
     assert roles[-1]["read_only"] is True
-    assert adapter.allocate_model_calls(9) == (3, 3, 3)
+    assert adapter.AGENT_POLICY["allow_delegation"] is True
+    assert adapter.AGENT_POLICY["allow_code_execution"] is False
 
 
 def test_t5_injected_runtime_records_role_delegation(tmp_path: Path) -> None:
@@ -24,7 +25,7 @@ def test_t5_injected_runtime_records_role_delegation(tmp_path: Path) -> None:
         "max_steps": 9,
     }
 
-    def runtime(_request: dict, prompt: str, _tools) -> dict:
+    def runtime(_request: dict, prompt: str) -> dict:
         assert "First arg?" in prompt
         assert "qa-001" not in prompt
         assert '"category"' not in prompt

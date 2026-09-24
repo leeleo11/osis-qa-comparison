@@ -42,6 +42,8 @@ def test_runner_never_sends_gold_to_generator(tmp_path: Path) -> None:
     )
     result = runner.run(sample, "T1", seed=0, model="model-x", label="smoke")
     assert result["status"] == "completed"
+    run_dir = Path(result["run_dir"])
+    assert run_dir.parts[-4:] == ("T1", "qa", "usage", "qa-001__seed0")
     assert result["evaluation"]["correct"] is True
     assert result["evaluation"]["accuracy"] == 1.0
     assert 0.99 < result["evaluation"]["overall"] <= 1.0

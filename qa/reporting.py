@@ -39,6 +39,7 @@ def collect_records(runs_root: str | Path) -> list[dict[str, Any]]:
                 "failure_code": str(manifest.get("failure_code") or ""),
                 "task_id": str(task.get("task_id") or manifest.get("task_id") or ""),
                 "category": str(task.get("category") or "unknown"),
+                "result_tree": "/".join(run.relative_to(root).parts[:-1]),
                 "correct": bool(evaluation.get("correct")),
                 "pred": str(evaluation.get("pred") or ""),
                 "elapsed_s": float(
@@ -103,6 +104,7 @@ def write_reports(output_dir: str | Path, records: list[dict[str, Any]]) -> dict
         "architecture_id",
         "task_id",
         "category",
+        "result_tree",
         "status",
         "failure_code",
         "correct",

@@ -32,7 +32,14 @@ def test_shared_prompt_contains_only_public_contract(tmp_path: Path) -> None:
 def test_knowledge_tools_are_read_only(tmp_path: Path) -> None:
     tools = KnowledgeTools(_request(tmp_path))
     names = [fn.__name__ for fn in tools.functions()]
-    assert names == ["list_knowledge_files", "search_knowledge", "read_knowledge_file"]
+    assert names[:5] == [
+        "list_skills",
+        "read_skill",
+        "read_skill_reference",
+        "list_reference_files",
+        "search_skill_cases",
+    ]
+    assert "write" not in " ".join(names)
     assert "osis-engine/SKILL.md" in tools.list_knowledge_files()
     assert "engine docs" in tools.read_knowledge_file("osis-engine/SKILL.md")
 

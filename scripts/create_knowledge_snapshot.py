@@ -1,4 +1,8 @@
-"""Create the local QA knowledge snapshot allowed by the parent protocol."""
+"""Copy the parent skill tree that T6's OpenCode already uses.
+
+T1-T5 read this copy. Files under ``.agents/skills`` are kept. Question gold
+lives in ``datasets/qa`` and is not part of this tree.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +13,6 @@ from pathlib import Path
 import shutil
 import subprocess
 from typing import Any
-
-
-ALLOWED_NAMES = frozenset({"SKILL.md", "pyosis_doc.py", "项目画像.md"})
 
 
 def _sha256(path: Path) -> str:
@@ -41,7 +42,7 @@ def create_snapshot(parent_repo: str | Path, output_dir: str | Path) -> dict[str
     copied: list[str] = []
     hashes: dict[str, str] = {}
     for path in sorted(source.rglob("*"), key=lambda item: item.relative_to(source).as_posix()):
-        if not path.is_file() or path.name not in ALLOWED_NAMES:
+        if not path.is_file() or path.is_symlink():
             continue
         relative = path.relative_to(source)
         target = output / relative
@@ -53,9 +54,9 @@ def create_snapshot(parent_repo: str | Path, output_dir: str | Path) -> dict[str
     if not any(path.endswith("/SKILL.md") or path == "SKILL.md" for path in copied):
         raise RuntimeError("snapshot contains no SKILL.md files")
     manifest = {
-        "protocol": "qa-gold-sources-v1",
+        "protocol": "qa-parent-skills-v1",
         "parent_commit": _commit(parent),
-        "selection": sorted(ALLOWED_NAMES),
+        "selection": "parent .agents/skills",
         "files": copied,
         "sha256": hashes,
     }

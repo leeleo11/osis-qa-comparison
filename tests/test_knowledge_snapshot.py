@@ -5,7 +5,7 @@ from pathlib import Path
 from scripts.create_knowledge_snapshot import create_snapshot
 
 
-def test_snapshot_copies_only_protocol_gold_sources(tmp_path: Path) -> None:
+def test_snapshot_copies_the_parent_skill_tree(tmp_path: Path) -> None:
     parent = tmp_path / "parent"
     skill = parent / ".agents" / "skills" / "osis-module-material"
     template = skill / "references" / "templates" / "bridge-a"
@@ -23,6 +23,6 @@ def test_snapshot_copies_only_protocol_gold_sources(tmp_path: Path) -> None:
     assert (output / "osis-module-material" / "SKILL.md").is_file()
     assert (output / "osis-module-material" / "pyosis_doc.py").is_file()
     assert (output / "osis-module-material" / "references" / "templates" / "bridge-a" / "项目画像.md").is_file()
-    assert not (output / "osis-module-material" / "references" / "templates" / "bridge-a" / "main.py").exists()
+    assert (output / "osis-module-material" / "references" / "templates" / "bridge-a" / "main.py").is_file()
     assert "questions.json" not in "\n".join(manifest["files"])
-    assert manifest["selection"] == ["SKILL.md", "pyosis_doc.py", "项目画像.md"]
+    assert manifest["selection"] == "parent .agents/skills"

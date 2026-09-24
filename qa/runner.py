@@ -71,8 +71,22 @@ class QARunner:
             for key, value in (framework_pythons or {}).items()
         }
 
-    def _run_dir(self, label: str, architecture: str, task_id: str, seed: int) -> Path:
-        return self.runs_root / _segment(label) / architecture / _segment(task_id) / f"seed-{seed}"
+    def _run_dir(
+        self,
+        label: str,
+        architecture: str,
+        task_id: str,
+        seed: int,
+        category: str,
+    ) -> Path:
+        return (
+            self.runs_root
+            / _segment(label)
+            / architecture
+            / "qa"
+            / _segment(category)
+            / f"{_segment(task_id)}__seed{seed}"
+        )
 
     def _archive_existing(self, run_dir: Path) -> Path:
         relative = run_dir.relative_to(self.runs_root)
@@ -99,7 +113,13 @@ class QARunner:
         adapter = get_adapter(architecture)
         public = sample.to_public_task()
         private = sample.private_reference()
-        run_dir = self._run_dir(label, architecture, public.task_id, int(seed))
+        run_dir = self._run_dir(
+            label,
+            architecture,
+            public.task_id,
+            int(seed),
+            public.category,
+        )
         result_path = run_dir / "run_result.json"
         if resume and result_path.is_file():
             prior = json.loads(result_path.read_text(encoding="utf-8"))

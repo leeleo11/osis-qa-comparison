@@ -1,8 +1,9 @@
-"""T5: sequential researcher, answerer, and read-only reviewer roles."""
+"""T5: CrewAI native skills, delegation, and file tools. Same policy as the modeling line."""
 
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -12,34 +13,69 @@ os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
 os.environ.setdefault("CREWAI_DISABLE_TRACKING", "true")
 
 from baselines._framework_common import (
-    KnowledgeTools,
     build_prompt,
     finish,
     model_api_settings,
     package_version,
-    resolve_max_steps,
+    LIBRARY_LOOP_BOUND,
 )
 
 
 ROLE_ORDER = ("researcher", "answerer", "reviewer")
-Runtime = Callable[[dict[str, Any], str, KnowledgeTools], dict[str, Any]]
+AGENT_POLICY = {"allow_code_execution": False, "allow_delegation": True}
+_RESOURCE_ROOTS = ("references", "scripts", "assets")
+_SKILL_NAME = re.compile(r"(?m)^name:\s*(?P<name>\S+)\s*$")
+Runtime = Callable[[dict[str, Any], str], dict[str, Any]]
 
 
 def role_blueprint() -> list[dict[str, Any]]:
     return [
         {"id": "researcher", "read_only": True, "goal": "Find exact public evidence."},
-        {"id": "answerer", "read_only": True, "goal": "Draft the shortest supported answer."},
+        {"id": "answerer", "read_only": False, "goal": "Draft the shortest supported answer."},
         {"id": "reviewer", "read_only": True, "goal": "Verify and emit FINAL ANSWER."},
     ]
 
 
-def allocate_model_calls(max_steps: int) -> tuple[int, int, int]:
-    total = max(3, int(max_steps))
-    base, remainder = divmod(total, 3)
-    return tuple(base + int(index < remainder) for index in range(3))  # type: ignore[return-value]
+def read_skill_resource(skills_dir: Path, skill_name: str, relative_path: str = "") -> str:
+    skill_dir = None
+    for child in Path(skills_dir).iterdir():
+        skill_md = child / "SKILL.md"
+        if not child.is_dir() or not skill_md.is_file():
+            continue
+        if child.name == skill_name:
+            skill_dir = child
+            break
+        match = _SKILL_NAME.search(skill_md.read_text(encoding="utf-8", errors="replace"))
+        if match and match.group("name") == skill_name:
+            skill_dir = child
+            break
+    if skill_dir is None:
+        return f"Skill {skill_name!r} is not available."
+    relative = relative_path.strip().replace("\\", "/")
+    if not relative:
+        return "No resource files."
+    path = Path(relative)
+    if path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] not in _RESOURCE_ROOTS:
+        return "Path must be one file inside references/, scripts/, or assets/."
+    target = skill_dir / path
+    if not target.is_file():
+        return f"File not found: {path.as_posix()}"
+    return target.read_text(encoding="utf-8", errors="replace")
 
 
-def _crewai_runtime(request: dict[str, Any], prompt: str, tools: KnowledgeTools) -> dict[str, Any]:
+def _file_tools(root: Path, *, write: bool) -> list[Any]:
+    from crewai_tools import DirectoryReadTool, FileReadTool, FileWriterTool
+
+    tools: list[Any] = [
+        DirectoryReadTool(directory=str(root)),
+        FileReadTool(base_dir=str(root)),
+    ]
+    if write:
+        tools.append(FileWriterTool(base_dir=str(root)))
+    return tools
+
+
+def _crewai_runtime(request: dict[str, Any], prompt: str) -> dict[str, Any]:
     from crewai import Agent, Crew, Process, Task
     from crewai.llm import LLM
     from crewai.tools import tool
@@ -57,49 +93,61 @@ def _crewai_runtime(request: dict[str, Any], prompt: str, tools: KnowledgeTools)
     if settings["max_tokens"] is not None:
         llm_kwargs["max_tokens"] = settings["max_tokens"]
     llm = LLM(**llm_kwargs)
-    budgets = allocate_model_calls(resolve_max_steps(request.get("max_steps")))
-    tool_defs = [tool(function) for function in tools.functions()]
-    policy = {
-        "llm": llm,
-        "tools": tool_defs,
-        "allow_delegation": False,
-        "allow_code_execution": False,
-        "verbose": False,
-    }
+    skills_dir = Path(request["skills_dir"])
+    notes = Path(request["workspace"]) / "t5_notes"
+    notes.mkdir(parents=True, exist_ok=True)
+
+    @tool("read_skill_resource")
+    def read_skill_resource_tool(skill_name: str, relative_path: str = "") -> str:
+        """List or read one resource file. load_skill itself returns only SKILL.md."""
+
+        return read_skill_resource(skills_dir, skill_name, relative_path)
+
+    resource = [read_skill_resource_tool]
+    read_tools = [*resource, *_file_tools(skills_dir, write=False)]
     researcher = Agent(
         role="OSIS knowledge researcher",
-        goal="Find exact API or template evidence in mounted public knowledge.",
-        backstory="A careful documentation researcher who does not guess.",
-        max_iter=budgets[0],
-        **policy,
+        goal="Load the mounted skills and find exact public evidence.",
+        backstory="Uses the crew load_skill tool. Does not guess.",
+        llm=llm,
+        tools=read_tools,
+        max_iter=LIBRARY_LOOP_BOUND,
+        verbose=False,
+        **AGENT_POLICY,
     )
     answerer = Agent(
         role="OSIS API answerer",
-        goal="Turn evidence into the shortest answer allowed by the protocol.",
-        backstory="An API specialist who follows the requested answer format.",
-        max_iter=budgets[1],
-        **policy,
+        goal="Turn the evidence into the shortest FINAL ANSWER.",
+        backstory="May write notes with the File Writer Tool. The answer itself is text.",
+        llm=llm,
+        tools=[*read_tools, *_file_tools(notes, write=True)],
+        max_iter=LIBRARY_LOOP_BOUND,
+        verbose=False,
+        **AGENT_POLICY,
     )
     reviewer = Agent(
         role="Read-only answer reviewer",
-        goal="Verify the draft against public knowledge and emit one FINAL ANSWER line.",
-        backstory="An independent reviewer with no hidden-answer access.",
-        max_iter=budgets[2],
-        **policy,
+        goal="Check the draft and emit one FINAL ANSWER line.",
+        backstory="Reads skills and notes. Does not write.",
+        llm=llm,
+        tools=[*read_tools, *_file_tools(notes, write=False)],
+        max_iter=LIBRARY_LOOP_BOUND,
+        verbose=False,
+        **AGENT_POLICY,
     )
     research_task = Task(
-        description="Research the public question and cite exact mounted evidence.\n\n" + prompt,
+        description="Use load_skill. You may delegate or ask a coworker.\n\n" + prompt,
         expected_output="Concise evidence and a proposed answer.",
         agent=researcher,
     )
     answer_task = Task(
-        description="Use the research evidence to draft the shortest supported answer.",
+        description="Draft the shortest supported answer.",
         expected_output="A draft ending in FINAL ANSWER.",
         agent=answerer,
         context=[research_task],
     )
     review_task = Task(
-        description="Check the draft against public knowledge and return exactly one final answer line.",
+        description="Check the draft and return exactly one final answer line.",
         expected_output="FINAL ANSWER: [answer]",
         agent=reviewer,
         context=[research_task, answer_task],
@@ -109,16 +157,13 @@ def _crewai_runtime(request: dict[str, Any], prompt: str, tools: KnowledgeTools)
         tasks=[research_task, answer_task, review_task],
         process=Process.sequential,
         verbose=False,
+        skills=[skills_dir],
     ).kickoff()
     outputs = list(getattr(result, "tasks_output", None) or [])
     return {
         "final_answer": str(getattr(result, "raw", result)),
         "roles_completed": list(ROLE_ORDER[: len(outputs)]),
-        "role_outputs": {
-            role: str(output)[-2000:]
-            for role, output in zip(ROLE_ORDER, outputs, strict=False)
-        },
-        "role_budgets": budgets,
+        "delegation": True,
         "model_calls": len(outputs),
         "tool_calls": 0,
     }
@@ -132,17 +177,17 @@ def run_generation(request: dict[str, Any], *, runtime: Runtime | None = None) -
         "framework_version": package_version("crewai"),
         "interaction_mode": "sequential_roles",
         "roles": list(ROLE_ORDER),
-        "reviewer_write_access": False,
+        "allow_delegation": True,
         "model": request.get("model"),
         "model_calls": 0,
         "tool_calls": 0,
         "status": "failed",
     }
     try:
-        output = (runtime or _crewai_runtime)(request, build_prompt(request), KnowledgeTools(request))
+        output = (runtime or _crewai_runtime)(request, build_prompt(request))
         metadata.update(output)
         if not str(output.get("final_answer") or "").strip():
-            raise RuntimeError("CrewAI returned no final answer")
+            raise RuntimeError("crew returned an empty answer")
         metadata.update(status="completed", stop_reason="completed")
     except Exception as exc:  # noqa: BLE001
         metadata.update(error_type=type(exc).__name__, error=str(exc)[:500], stop_reason="error")

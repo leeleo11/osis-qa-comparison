@@ -27,6 +27,11 @@ def package_version(name: str) -> str:
         return "unavailable"
 
 
+# Libraries install a small default loop bound when the argument is omitted.
+# The experiment does not stop on steps. This value only disables that default.
+LIBRARY_LOOP_BOUND = 1_000_000
+
+
 def resolve_max_steps(value: object, *, default: int = 80) -> int:
     try:
         steps = int(value)  # type: ignore[arg-type]
@@ -95,8 +100,50 @@ class KnowledgeTools:
         except Exception as exc:  # noqa: BLE001
             return f"TOOL_ERROR: {type(exc).__name__}: {exc}"
 
+    def list_skills(self) -> str:
+        """List skill directories that contain SKILL.md."""
+        root = self.reader.root
+        names = sorted(
+            path.name
+            for path in root.iterdir()
+            if path.is_dir() and (path / "SKILL.md").is_file()
+        )
+        return json.dumps(names, ensure_ascii=False)
+
+    def read_skill(self, skill_id: str) -> str:
+        """Read one mounted SKILL.md."""
+        return self.read_knowledge_file(f"{skill_id}/SKILL.md")
+
+    def read_skill_reference(self, skill_id: str, relative_path: str) -> str:
+        """Read one file inside a mounted skill directory."""
+        return self.read_knowledge_file(f"{skill_id}/{relative_path}")
+
+    def list_reference_files(self, skill_id: str, template_name: str = "") -> str:
+        """List files under one skill, optionally under one template directory."""
+        prefix = f"{skill_id}/{template_name}".rstrip("/")
+        files = [
+            relative
+            for relative in self.reader.list_files()
+            if relative == prefix or relative.startswith(prefix + "/")
+        ]
+        return json.dumps(files, ensure_ascii=False)
+
+    def search_skill_cases(self, query: str) -> str:
+        """Search mounted knowledge. Same job as the modeling line's case search."""
+        return json.dumps(self.reader.search(query), ensure_ascii=False)
+
     def functions(self) -> list[Any]:
-        return [self.list_knowledge_files, self.search_knowledge, self.read_knowledge_file]
+        """LangGraph must be given tools. This is the modeling line's read surface."""
+        return [
+            self.list_skills,
+            self.read_skill,
+            self.read_skill_reference,
+            self.list_reference_files,
+            self.search_skill_cases,
+            self.list_knowledge_files,
+            self.search_knowledge,
+            self.read_knowledge_file,
+        ]
 
 
 def model_api_settings(request: dict[str, Any]) -> dict[str, Any]:

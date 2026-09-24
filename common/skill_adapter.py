@@ -35,8 +35,6 @@ class SkillAdapter:
         path = self._inside(self.root / raw)
         if not path.is_file():
             raise FileNotFoundError(path)
-        if path.stat().st_size > self.max_read_bytes:
-            raise ValueError(f"knowledge file exceeds {self.max_read_bytes} bytes")
         return path.read_text(encoding="utf-8", errors="replace")
 
     def search(self, query: str, *, limit: int = 20) -> list[dict[str, object]]:
